@@ -24,7 +24,7 @@ service AllocationHistoryService {
 }
 annotate AllocationHistoryService.AllocationHistory with @(
   UI: {
-    SelectionFields: [ executedAt, executedBy, allocationType, allocationDestCode ],
+    SelectionFields: [ executedAt, executedBy, allocationType, allocationDestCode, companyCode, companyName ],
     LineItem: [
       { Value: executedAt },
       { Value: executedBy },
