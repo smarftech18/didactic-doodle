@@ -1,0 +1,11 @@
+code,text
+TYPE01,Regular
+TYPE02,Adjustment
+TYPE03,Correction
+TYPE04,Reversal
+TYPE05,ManualP
+TYPE06,Auto
+TYPE07,Monthly
+TYPE08,Quarterly
+TYPE09,YearEnd
+TYPE10,Test
