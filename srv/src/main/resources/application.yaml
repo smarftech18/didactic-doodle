@@ -5,6 +5,11 @@ spring:
   sql.init.platform: h2
 cds:
   data-source.auto-config.enabled: false
+  security:
+    mock:
+      users:
+        dev:
+          password: dev
 ---
 management:
   endpoint:
@@ -23,3 +28,6 @@ management:
       enabled: true
     db:
       enabled: true
+---
+omfr:
+  mock: true
