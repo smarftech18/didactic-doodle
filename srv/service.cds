@@ -1,19 +1,21 @@
-using { ext.s4 as hist } from './external/s4-alloc-history';
-using { ext.s4 as acct } from './external/s4-alloc-account';
-using { ext.s4 as mat  } from './external/s4-material';
-using { ext.s4 as emp  } from './external/s4-employee';
+// using { ext.s4 as hist } from './external/s4-alloc-history';
+// using { ext.s4 as acct } from './external/s4-alloc-account';
+// using { ext.s4 as mat  } from './external/s4-material';
+// using { ext.s4 as emp  } from './external/s4-employee';
+
+using { local_db } from '../db/scheam';
 
 service AllocationHistoryService {
 
   // ① 外部エンティティを公開（値ヘルプ用）
-  entity S4AllocationHistory as projection on hist.S4AllocHistory.AllocationHistory;
-  entity AllocationAccounts  as projection on acct.S4AllocAccount.AllocationAccounts;
-  entity Materials           as projection on mat.S4Material.Materials;
-  entity Employees           as projection on emp.S4Employee.Employees;
+  entity S4AllocationHistory as projection on local_db.AllocationHistory;
+  entity AllocationAccounts  as projection on local_db.AllocationAccounts;
+  entity Materials           as projection on local_db.Materials;
+  entity Employees           as projection on local_db.Employees;
 
   // ② 画面用（あなたの言う「配分登録履歴」）
   //    ※S4配分登録履歴CDSViewの項目名＝表示列名、なので基本はprojectionでOK
-  entity AllocationHistory   as projection on hist.S4AllocHistory.AllocationHistory;
+  entity AllocationHistory   as projection on local_db.AllocationHistory;
 
   // ③ 配分種別がコードリスト（固定少数）なら、永続化なしの候補エンティティを作る（任意）
   @cds.persistence.skip
