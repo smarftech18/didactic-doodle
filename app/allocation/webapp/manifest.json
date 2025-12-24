@@ -116,7 +116,12 @@
                     "type": "ResponsiveTable"
                   }
                 }
+              },
+              "filterSettings": {
+                "dateSettings": {
+                  "useDateRange": true
               }
+            }
             }
           }
         },

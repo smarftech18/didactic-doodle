@@ -1,38 +1,54 @@
-// using { ext.s4 as hist } from './external/s4-alloc-history';
-// using { ext.s4 as acct } from './external/s4-alloc-account';
-// using { ext.s4 as mat  } from './external/s4-material';
-// using { ext.s4 as emp  } from './external/s4-employee';
-
-using { local_db } from '../db/scheam';
+using { local_db } from '../db/schema';
 
 service AllocationHistoryService {
 
-  // ① 外部エンティティを公開（値ヘルプ用）
-  entity S4AllocationHistory as projection on local_db.AllocationHistory;
-  entity AllocationAccounts  as projection on local_db.AllocationAccounts;
-  entity Materials           as projection on local_db.Materials;
-  entity Employees           as projection on local_db.Employees;
+  // 値ヘルプ用
+  entity AllocationAccounts as projection on local_db.AllocationAccounts;
+  entity Materials          as projection on local_db.Materials;
+  entity Employees          as projection on local_db.Employees;
 
-  // ② 画面用（あなたの言う「配分登録履歴」）
-  //    ※S4配分登録履歴CDSViewの項目名＝表示列名、なので基本はprojectionでOK
-  entity AllocationHistory   as projection on local_db.AllocationHistory;
+  // 画面用（配分登録履歴）
+  entity AllocationHistory as projection on local_db.AllocationHistory {
+    *,
+    // UI検索・表示用（カレンダー向け）
+    @Core.Computed
+    virtual reflectionDateDT : Timestamp
+  };
 
-  // ③ 配分種別がコードリスト（固定少数）なら、永続化なしの候補エンティティを作る（任意）
+  // 固定値（任意）
   @cds.persistence.skip
   entity AllocationTypes {
     key code : String(10);
         text : String(60);
   }
 }
+
 annotate AllocationHistoryService.AllocationHistory with @(
   UI: {
-    SelectionFields: [ executedAt, executedBy, allocationType, allocationDestCode, companyCode, companyName ],
+    SelectionFields: [
+      executedAt,
+      executedBy,
+      allocationType,
+      allocationDestCode,
+      companyCode,
+      companyName,
+      reflectionDateDT
+    ],
     LineItem: [
       { Value: executedAt },
       { Value: executedBy },
       { Value: allocationType },
-      { Value: allocationDestCode }
-      // 必要ならS4履歴の列を追加
+      { Value: allocationDestCode },
+      { Value: reflectionDateDT }
+    ]
+  },
+  // 検索項目にDatepickerを設定
+   Capabilities.FilterRestrictions : {
+    FilterExpressionRestrictions : [
+      {
+        Property : 'reflectionDateDT',
+        AllowedExpressions : 'SingleRange'
+      }
     ]
   }
 );
@@ -63,7 +79,7 @@ annotate AllocationHistoryService.AllocationHistory with {
     ]
   });
 
-  // 配分種別（固定少数ならドロップダウン寄せ）
+  // 配分種別（固定少数ならドロップダウン）
   allocationType @(
     Common.ValueListWithFixedValues: true,
     Common.ValueList: {
@@ -77,4 +93,10 @@ annotate AllocationHistoryService.AllocationHistory with {
       ]
     }
   );
+
+  // UI用日時
+  reflectionDateDT @Common.Label: '反映日時'
+                   @Common.DisplayFormat: #DateTime
+                   @cds.odata.Type: 'Edm.DateTimeOffset';
 };
+
