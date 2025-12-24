@@ -35,8 +35,10 @@ public class AllocationHistoryGuardHandler implements EventHandler {
   @Before(event = "READ", entity = ENTITY)
   public void beforeRead(CdsReadEventContext ctx) {
 
-    System.out.println("[beforeRead] called. entity=" + ctx.getTarget().getName());
-    System.out.println("[beforeRead] where(before)=" + ctx.getCqn().where());
+  System.out.println("=== BEFORE READ ===");
+  System.out.println("target = " + ctx.getTarget().getName());
+  // System.out.println("isCount = " + ctx.getCqn().isCount());
+  System.out.println("where = " + ctx.getCqn().where());
 
     CqnSelect original = ctx.getCqn();
     if (original == null || original.where() == null) return;
@@ -48,23 +50,27 @@ public class AllocationHistoryGuardHandler implements EventHandler {
           Value<?> lhs,
           CqnComparisonPredicate.Operator op,
           Value<?> rhs) {
-
-        // --- ① ElementRef の場合 ---
-        if (lhs instanceof CqnElementRef ref
-            && VIRTUAL_FIELD.equals(ref.lastSegment())) {
-
-          return convert(op, rhs);
+          
+        Value<?> newLhs = lhs;
+        Value<?> newRhs = rhs;
+          
+        boolean isTarget =
+            (lhs instanceof CqnElementRef ref && VIRTUAL_FIELD.equals(ref.lastSegment()))
+         || (lhs instanceof CqnStructuredTypeRef ref && VIRTUAL_FIELD.equals(ref.lastSegment()));
+          
+        if (isTarget && rhs instanceof CqnLiteral lit && lit.value() instanceof OffsetDateTime odt) {
+        
+          newLhs = CQL.get(DB_FIELD);
+        
+          String str14 = odt.atZoneSameInstant(JST).format(STR14);
+        
+          // ★ ここが決定打
+          newRhs = CQL.literal(str14, com.sap.cds.reflect.CdsBaseType.STRING);
         }
-
-        // --- ② StructuredTypeRef の場合（★今回の肝） ---
-        if (lhs instanceof CqnStructuredTypeRef ref
-            && VIRTUAL_FIELD.equals(ref.lastSegment())) {
-
-          return convert(op, rhs);
-        }
-
-        return CQL.comparison(lhs, op, rhs);
+      
+        return CQL.comparison(newLhs, op, newRhs);
       }
+
 
       // 共通の変換処理をメソッド化（ロジックは今までと同じ）
       private CqnPredicate convert(
