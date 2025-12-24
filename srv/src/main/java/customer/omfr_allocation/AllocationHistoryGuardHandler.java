@@ -11,6 +11,7 @@ import com.sap.cds.ql.Value;
 import com.sap.cds.ql.cqn.CqnComparisonPredicate;
 import com.sap.cds.ql.cqn.CqnLiteral;
 import com.sap.cds.ql.cqn.CqnElementRef;
+import com.sap.cds.ql.cqn.CqnStructuredTypeRef;   // ★追加
 import com.sap.cds.ql.cqn.CqnPredicate;
 import com.sap.cds.ql.cqn.CqnSelect;
 import com.sap.cds.ql.cqn.Modifier;
@@ -28,12 +29,15 @@ public class AllocationHistoryGuardHandler implements EventHandler {
   private static final String DB_FIELD = "reflectionDate";
 
   private static final ZoneId JST = ZoneId.of("Asia/Tokyo");
-  private static final DateTimeFormatter STR14 = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+  private static final DateTimeFormatter STR14 =
+      DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
   @Before(event = "READ", entity = ENTITY)
   public void beforeRead(CdsReadEventContext ctx) {
+
     System.out.println("[beforeRead] called. entity=" + ctx.getTarget().getName());
-    System.out.println("[beforeRead] where=" + ctx.getCqn().where());
+    System.out.println("[beforeRead] where(before)=" + ctx.getCqn().where());
+
     CqnSelect original = ctx.getCqn();
     if (original == null || original.where() == null) return;
 
@@ -45,25 +49,46 @@ public class AllocationHistoryGuardHandler implements EventHandler {
           CqnComparisonPredicate.Operator op,
           Value<?> rhs) {
 
-        // lhs が「項目参照」で、その名前が reflectionDateDT の比較だけを対象にする
-        
-        if (lhs instanceof CqnElementRef ref && VIRTUAL_FIELD.equals(ref.lastSegment())) {
-          // DB実体の列（reflectionDate）に置換
-          Value<?> newLhs = CQL.get(DB_FIELD);
+        // --- ① ElementRef の場合 ---
+        if (lhs instanceof CqnElementRef ref
+            && VIRTUAL_FIELD.equals(ref.lastSegment())) {
 
-          // rhs（比較値）が OffsetDateTime なら String(14) に変換して置換
-          if (rhs instanceof CqnLiteral lit && lit.value() instanceof OffsetDateTime odt) {
-            String str14 = odt.atZoneSameInstant(JST).format(STR14);
-            Value<?> newRhs = CQL.val(str14);
-            return CQL.comparison(newLhs, op, newRhs);
-          }
+          return convert(op, rhs);
         }
 
-        // それ以外はそのまま（壊さない）
+        // --- ② StructuredTypeRef の場合（★今回の肝） ---
+        if (lhs instanceof CqnStructuredTypeRef ref
+            && VIRTUAL_FIELD.equals(ref.lastSegment())) {
+
+          return convert(op, rhs);
+        }
+
         return CQL.comparison(lhs, op, rhs);
+      }
+
+      // 共通の変換処理をメソッド化（ロジックは今までと同じ）
+      private CqnPredicate convert(
+          CqnComparisonPredicate.Operator op,
+          Value<?> rhs) {
+
+        Value<?> newLhs = CQL.get(DB_FIELD);
+
+        if (rhs instanceof CqnLiteral lit
+            && lit.value() instanceof OffsetDateTime odt) {
+
+          String str14 = odt.atZoneSameInstant(JST).format(STR14);
+          Value<?> newRhs = CQL.val(str14);
+
+          return CQL.comparison(newLhs, op, newRhs);
+        }
+
+        return CQL.comparison(newLhs, op, rhs);
       }
     };
 
-    ctx.setCqn(CQL.copy(original, modifier));
+    CqnSelect modified = CQL.copy(original, modifier);
+    System.out.println("[beforeRead] where(after)=" + modified.where());
+
+    ctx.setCqn(modified);
   }
 }
