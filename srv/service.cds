@@ -39,7 +39,7 @@ annotate AllocationHistoryService.AllocationHistory with @(
       { Value: executedBy },
       { Value: allocationType },
       { Value: allocationDestCode },
-      { Value: reflectionDateDT }
+      { Value: reflectionDate }
     ]
   },
   // 検索項目にDatepickerを設定

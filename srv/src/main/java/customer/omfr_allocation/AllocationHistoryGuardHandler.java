@@ -1,74 +1,69 @@
-// package customer.omfr_allocation;
+package customer.omfr_allocation;
 
-// import com.sap.cds.Result;
-// import com.sap.cds.ql.Select;
-// import com.sap.cds.ql.cqn.CqnSelect;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 
-// import com.sap.cds.services.cds.CdsReadEventContext;
-// import com.sap.cds.services.handler.EventHandler;
-// import com.sap.cds.services.handler.annotations.On;
-// import com.sap.cds.services.persistence.PersistenceService;
+import org.springframework.stereotype.Component;
 
-// import org.springframework.stereotype.Component;
-// import org.springframework.beans.factory.annotation.Autowired;
+import com.sap.cds.ql.CQL;
+import com.sap.cds.ql.Value;
+import com.sap.cds.ql.cqn.CqnComparisonPredicate;
+import com.sap.cds.ql.cqn.CqnLiteral;
+import com.sap.cds.ql.cqn.CqnElementRef;
+import com.sap.cds.ql.cqn.CqnPredicate;
+import com.sap.cds.ql.cqn.CqnSelect;
+import com.sap.cds.ql.cqn.Modifier;
+import com.sap.cds.services.cds.CdsReadEventContext;
+import com.sap.cds.services.handler.EventHandler;
+import com.sap.cds.services.handler.annotations.Before;
+import com.sap.cds.services.handler.annotations.ServiceName;
 
-// @Component
-// public class AllocationHistoryGuardHandler implements EventHandler {
+@Component
+@ServiceName("AllocationHistoryService")
+public class AllocationHistoryGuardHandler implements EventHandler {
 
-//   private static final String THRESHOLD_CONST_ID = "ALLOC_HIST_THRESHOLD";
-//   private static final String KEY_COL = "ID"; // ← AllocationHistory の key項目名に置換
+  private static final String ENTITY = "AllocationHistoryService.AllocationHistory";
+  private static final String VIRTUAL_FIELD = "reflectionDateDT";
+  private static final String DB_FIELD = "reflectionDate";
 
-//   @Autowired
-//   PersistenceService db; // ★ これでDBに直接run（再帰回避）
+  private static final ZoneId JST = ZoneId.of("Asia/Tokyo");
+  private static final DateTimeFormatter STR14 = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
-//   @On(event = "READ", entity = "AllocationHistoryService.AllocationHistory")
-//   public void onReadAllocationHistory(CdsReadEventContext ctx) {
+  @Before(event = "READ", entity = ENTITY)
+  public void beforeRead(CdsReadEventContext ctx) {
+    System.out.println("[beforeRead] called. entity=" + ctx.getTarget().getName());
+    System.out.println("[beforeRead] where=" + ctx.getCqn().where());
+    CqnSelect original = ctx.getCqn();
+    if (original == null || original.where() == null) return;
 
-//     int threshold = loadThreshold();
-//     if (threshold > 0) {
-//       long totalCount = countTotalBySameFilter(ctx.getCqn());
-//       if (totalCount > threshold) {
-//         ctx.reject(String.format(
-//           "検索結果が %d 件のため上限（%d件）を超えました。検索条件を絞り込んでください。",
-//           totalCount, threshold
-//         ));
-//         return;
-//       }
-//     }
+    Modifier modifier = new Modifier() {
 
-//     // 閾値OK → 本来のREAD（ListReportが投げたCQN）をDB実行して結果を返す
-//     Result data = db.run(ctx.getCqn());
-//     ctx.setResult(data);
-//   }
+      @Override
+      public CqnPredicate comparison(
+          Value<?> lhs,
+          CqnComparisonPredicate.Operator op,
+          Value<?> rhs) {
 
-//   private int loadThreshold() {
-//     CqnSelect q = Select.from("db.ConstMaster")
-//         .columns("Value1")
-//         .where(w -> w.get("ConstId").eq(THRESHOLD_CONST_ID));
+        // lhs が「項目参照」で、その名前が reflectionDateDT の比較だけを対象にする
+        
+        if (lhs instanceof CqnElementRef ref && VIRTUAL_FIELD.equals(ref.lastSegment())) {
+          // DB実体の列（reflectionDate）に置換
+          Value<?> newLhs = CQL.get(DB_FIELD);
 
-//     Result r = db.run(q);
+          // rhs（比較値）が OffsetDateTime なら String(14) に変換して置換
+          if (rhs instanceof CqnLiteral lit && lit.value() instanceof OffsetDateTime odt) {
+            String str14 = odt.atZoneSameInstant(JST).format(STR14);
+            Value<?> newRhs = CQL.val(str14);
+            return CQL.comparison(newLhs, op, newRhs);
+          }
+        }
 
-//     Number n = r.first()
-//         .map(row -> (Number) row.get("Value1"))
-//         .orElse(null);
+        // それ以外はそのまま（壊さない）
+        return CQL.comparison(lhs, op, rhs);
+      }
+    };
 
-//     return n != null ? n.intValue() : 0;
-//   }
-
-//   private long countTotalBySameFilter(CqnSelect original) {
-//     // COUNT用クエリを作る（4.4.1では count() は引数必須）
-//     var builder = Select.from(original.ref())
-//         .columns(c -> c.count(x -> x.get(KEY_COL)).as("cnt"));
-
-//     // where は Optional<CqnPredicate> なので ifPresent で付与
-//     original.where().ifPresent(builder::where);
-
-//     Result r = db.run(builder);
-
-//     Number n = r.first()
-//         .map(row -> (Number) row.get("cnt"))
-//         .orElse(0);
-
-//     return n.longValue();
-//   }
-// }
+    ctx.setCqn(CQL.copy(original, modifier));
+  }
+}
